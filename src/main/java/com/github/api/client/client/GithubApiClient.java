@@ -1,75 +1,75 @@
 package com.github.api.client.client;
 
+import com.github.api.client.PropertiesValues;
 import com.github.api.client.exception.GithubUserNotFoundException;
+import com.github.api.client.exception.WrongParamValueException;
 import com.github.api.client.model.Branch;
 import com.github.api.client.model.Repository;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponents;
+import org.springframework.web.util.UriComponentsBuilder;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
+@Slf4j
 @RequiredArgsConstructor
 @Component
-public class GithubApiClient {
+public final class GithubApiClient {
     private static final String API_VERSION_HEADER_KEY = "X-GitHub-Api-Version";
     private static final String USER_AGENT_HEADER_KEY = "User-Agent";
+    private static final String SORT_PARAM_KEY = "sort";
+    private static final String DIRECTION_PARAM_KEY = "direction";
     private final RestTemplate restTemplate;
-    @Value("${github.api.url.base}")
-    private String githubApiBaseUrl;
-    @Value("${github.api.url.user-repos}")
-    private String githubApiUserReposUrl;
-    @Value("${github.api.url.user-repo-branches}")
-    private String githubApiUserRepoBranchesUrl;
-    @Value("${github.api.header.accept}")
-    private String githubApiAcceptHeader;
-    @Value("${github.api.version}")
-    private String githubApiVersion;
+    private final PropertiesValues propertyValues;
 
-    public List<Repository> getUserRepos(String userName, String accessToken) {
-        String userReposUrl = githubApiBaseUrl + String.format(githubApiUserReposUrl, userName);
+    public List<Repository> getUserRepos(String userName, String accessToken, String sort, String direction) {
+        String userReposUrl =  this.propertyValues.githubApiBaseUrl + String.format(this.propertyValues.githubApiUserReposUrl, userName);
+        ParameterizedTypeReference<List<Repository>> responseType = new ParameterizedTypeReference<>(){};
+        userReposUrl = buildUrlWithParameters(userReposUrl, sort, direction).toUriString();
 
-        try {
-            ResponseEntity<List<Repository>> apiResponse = this.restTemplate.exchange(
-                    userReposUrl,
-                    HttpMethod.GET,
-                    buildRequestEntity(userReposUrl, userName, accessToken),
-                    new ParameterizedTypeReference<>() {}
-            );
-
-            return apiResponse.getBody();
-        } catch (HttpClientErrorException exception) {
-            if (exception.getStatusCode().equals(HttpStatus.NOT_FOUND)) {
-                throw new GithubUserNotFoundException("User with given name was not found");
-            }
-
-            throw exception;
-        }
+        return performRequest(userReposUrl, userName, accessToken, responseType);
     }
 
     public List<Branch> getBranchesForUserRepo(String userName, String repoName, String accessToken) {
-        String repoBranchesUrl = githubApiBaseUrl + String.format(githubApiUserRepoBranchesUrl, userName, repoName+"eee");
+        String repoBranchesUrl = this.propertyValues.githubApiBaseUrl + String.format(this.propertyValues.githubApiUserRepoBranchesUrl, userName, repoName);
+        ParameterizedTypeReference<List<Branch>> responseType = new ParameterizedTypeReference<>(){};
 
+        return performRequest(repoBranchesUrl, userName, accessToken, responseType);
+    }
+
+    private <T> List<T> performRequest(
+            String url,
+            String userName,
+            String accessToken,
+            ParameterizedTypeReference<List<T>> responseType
+    ) {
         try {
-            ResponseEntity<List<Branch>> apiResponse = this.restTemplate.exchange(
-                    repoBranchesUrl,
+            ResponseEntity<List<T>> apiResponse = this.restTemplate.exchange(
+                    url,
                     HttpMethod.GET,
-                    buildRequestEntity(repoBranchesUrl, userName, accessToken),
-                    new ParameterizedTypeReference<>() {}
+                    buildRequestEntity(url, userName, accessToken),
+                    responseType
             );
+            log.info("Fetching data from: {} succeded", url);
 
-            return apiResponse.getBody();
+            return Objects.nonNull(apiResponse.getBody()) ? apiResponse.getBody() : Collections.emptyList();
         } catch (HttpClientErrorException exception) {
             if (exception.getStatusCode().equals(HttpStatus.NOT_FOUND)) {
-                throw new GithubUserNotFoundException("User with given name was not found");
+                log.warn("User or repository not found during request: {}", url);
+                throw new GithubUserNotFoundException(this.propertyValues.userNotFoundMessage);
             }
 
+            log.warn("Unexpected error occurred during request");
             throw exception;
         }
     }
@@ -77,20 +77,44 @@ public class GithubApiClient {
     private RequestEntity<Void> buildRequestEntity(String url, String userName, String accessToken) {
         HttpHeaders httpHeaders = new HttpHeaders();
 
-        if (!StringUtils.hasText(accessToken)) {
+        if (StringUtils.hasText(accessToken)) {
             httpHeaders.setBearerAuth(accessToken);
         }
 
         // Github API's documentation recommends to set this headers
-        // More info here: https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api?apiVersion=2022-11-28
-        MediaType mediaType = MediaType.valueOf(githubApiAcceptHeader);
+        // More info here: https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api
+        MediaType mediaType = MediaType.valueOf(this.propertyValues.githubApiAcceptHeader);
         httpHeaders.setAccept(List.of(mediaType));
-        httpHeaders.set(API_VERSION_HEADER_KEY, githubApiVersion);
+        httpHeaders.set(API_VERSION_HEADER_KEY, this.propertyValues.githubApiVersion);
         httpHeaders.set(USER_AGENT_HEADER_KEY, userName);
 
         return RequestEntity
                 .get(url)
                 .headers(httpHeaders)
                 .build();
+    }
+
+    // This method adds optional parameters for sorting repositories
+    // More info here: https://docs.github.com/en/rest/repos/repos?apiVersion=2022-11-28#list-repositories-for-a-user
+    private UriComponents buildUrlWithParameters(String url, String sort, String direction) {
+        UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url);
+
+        if (StringUtils.hasText(sort)) {
+            if (!this.propertyValues.allowedSorts.contains(sort)) {
+                throw new WrongParamValueException(this.propertyValues.wrongSortParamMessage);
+            }
+
+            builder.queryParam(SORT_PARAM_KEY, sort);
+        }
+
+        if (StringUtils.hasText(direction)) {
+            if (!this.propertyValues.allowedDirections.contains(direction)) {
+                throw new WrongParamValueException(this.propertyValues.wrongDirectionParamMessage);
+            }
+
+            builder.queryParam(DIRECTION_PARAM_KEY, direction);
+        }
+
+        return builder.build(true);
     }
 }

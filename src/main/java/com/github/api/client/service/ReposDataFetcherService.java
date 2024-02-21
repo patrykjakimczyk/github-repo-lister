@@ -15,8 +15,8 @@ import java.util.List;
 public class ReposDataFetcherService {
     private final GithubApiClient githubApiClient;
 
-    public List<RepositoryDTO> getUserRepos(String userName, String accessToken) {
-        return this.githubApiClient.getUserRepos(userName, accessToken)
+    public List<RepositoryDTO> getUserRepos(String userName, String accessToken, String sort, String direction) {
+        return this.githubApiClient.getUserRepos(userName, accessToken, sort, direction)
                 .stream()
                 .filter(repository -> !repository.fork())
                 .map(repository -> {
@@ -25,6 +25,7 @@ public class ReposDataFetcherService {
                             repository.name(),
                             accessToken
                     );
+
                     return mapToRepositoryDTO(repository, branches);
                 })
                 .toList();
