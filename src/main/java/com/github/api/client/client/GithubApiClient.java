@@ -67,7 +67,7 @@ public final class GithubApiClient {
             return Objects.nonNull(apiResponse.getBody()) ? apiResponse.getBody() : Collections.emptyList();
         } catch (HttpClientErrorException exception) {
             if (exception.getStatusCode().equals(HttpStatus.NOT_FOUND)) {
-                log.warn("User or repository not found during request: {}", url);
+                log.warn("User or repository has not been found during request: {}", url);
                 throw new GithubUserNotFoundException(this.propertiesValues.userNotFoundMessage);
             }
 

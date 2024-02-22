@@ -27,7 +27,7 @@ public class ReposDataFetcherController {
             @RequestParam(required = false) String direction
     ) throws HttpMediaTypeNotAcceptableException {
         if (accept.isEmpty()) {
-            log.info("Empty accept request header value provided");
+            log.info("Value of accept request header was not provided");
             throw new HttpMediaTypeNotAcceptableException("");
         }
 
