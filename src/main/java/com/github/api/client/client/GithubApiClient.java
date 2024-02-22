@@ -25,15 +25,16 @@ import java.util.Objects;
 @RequiredArgsConstructor
 @Component
 public final class GithubApiClient {
-    private static final String API_VERSION_HEADER_KEY = "X-GitHub-Api-Version";
+    public static final String API_VERSION_HEADER_KEY = "X-GitHub-Api-Version";
     private static final String USER_AGENT_HEADER_KEY = "User-Agent";
     private static final String SORT_PARAM_KEY = "sort";
     private static final String DIRECTION_PARAM_KEY = "direction";
     private final RestTemplate restTemplate;
-    private final PropertiesValues propertyValues;
+    private final PropertiesValues propertiesValues;
 
     public List<Repository> getUserRepos(String userName, String accessToken, String sort, String direction) {
-        String userReposUrl =  this.propertyValues.githubApiBaseUrl + String.format(this.propertyValues.githubApiUserReposUrl, userName);
+        String userReposUrl =  this.propertiesValues.githubApiBaseUrl +
+                String.format(this.propertiesValues.githubApiUserReposUrl, userName);
         ParameterizedTypeReference<List<Repository>> responseType = new ParameterizedTypeReference<>(){};
         userReposUrl = buildUrlWithParameters(userReposUrl, sort, direction).toUriString();
 
@@ -41,7 +42,8 @@ public final class GithubApiClient {
     }
 
     public List<Branch> getBranchesForUserRepo(String userName, String repoName, String accessToken) {
-        String repoBranchesUrl = this.propertyValues.githubApiBaseUrl + String.format(this.propertyValues.githubApiUserRepoBranchesUrl, userName, repoName);
+        String repoBranchesUrl = this.propertiesValues.githubApiBaseUrl +
+                String.format(this.propertiesValues.githubApiUserRepoBranchesUrl, userName, repoName);
         ParameterizedTypeReference<List<Branch>> responseType = new ParameterizedTypeReference<>(){};
 
         return performRequest(repoBranchesUrl, userName, accessToken, responseType);
@@ -66,7 +68,7 @@ public final class GithubApiClient {
         } catch (HttpClientErrorException exception) {
             if (exception.getStatusCode().equals(HttpStatus.NOT_FOUND)) {
                 log.warn("User or repository not found during request: {}", url);
-                throw new GithubUserNotFoundException(this.propertyValues.userNotFoundMessage);
+                throw new GithubUserNotFoundException(this.propertiesValues.userNotFoundMessage);
             }
 
             log.warn("Unexpected error occurred during request");
@@ -83,9 +85,9 @@ public final class GithubApiClient {
 
         // Github API's documentation recommends to set this headers
         // More info here: https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api
-        MediaType mediaType = MediaType.valueOf(this.propertyValues.githubApiAcceptHeader);
+        MediaType mediaType = MediaType.valueOf(this.propertiesValues.githubApiAcceptHeader);
         httpHeaders.setAccept(List.of(mediaType));
-        httpHeaders.set(API_VERSION_HEADER_KEY, this.propertyValues.githubApiVersion);
+        httpHeaders.set(API_VERSION_HEADER_KEY, this.propertiesValues.githubApiVersion);
         httpHeaders.set(USER_AGENT_HEADER_KEY, userName);
 
         return RequestEntity
@@ -100,16 +102,16 @@ public final class GithubApiClient {
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(url);
 
         if (StringUtils.hasText(sort)) {
-            if (!this.propertyValues.allowedSorts.contains(sort)) {
-                throw new WrongParamValueException(this.propertyValues.wrongSortParamMessage);
+            if (!this.propertiesValues.allowedSorts.contains(sort)) {
+                throw new WrongParamValueException(this.propertiesValues.wrongSortParamMessage);
             }
 
             builder.queryParam(SORT_PARAM_KEY, sort);
         }
 
         if (StringUtils.hasText(direction)) {
-            if (!this.propertyValues.allowedDirections.contains(direction)) {
-                throw new WrongParamValueException(this.propertyValues.wrongDirectionParamMessage);
+            if (!this.propertiesValues.allowedDirections.contains(direction)) {
+                throw new WrongParamValueException(this.propertiesValues.wrongDirectionParamMessage);
             }
 
             builder.queryParam(DIRECTION_PARAM_KEY, direction);

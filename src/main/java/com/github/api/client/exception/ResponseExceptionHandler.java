@@ -12,7 +12,7 @@ import org.springframework.web.client.HttpClientErrorException;
 @RequiredArgsConstructor
 @RestControllerAdvice
 public class ResponseExceptionHandler {
-    private final PropertiesValues propertyValues;
+    private final PropertiesValues propertiesValues;
 
     @ExceptionHandler(GithubUserNotFoundException.class)
     public ResponseEntity<ExceptionMessage> githubUserNotFoundException(GithubUserNotFoundException exception) {
@@ -32,14 +32,14 @@ public class ResponseExceptionHandler {
     ) {
         return ResponseEntity.status(HttpStatus.NOT_ACCEPTABLE)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new ExceptionMessage(HttpStatus.NOT_ACCEPTABLE.value(), this.propertyValues.notAcceptableMessage));
+                .body(new ExceptionMessage(HttpStatus.NOT_ACCEPTABLE.value(), this.propertiesValues.notAcceptableMessage));
     }
 
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ExceptionMessage> missingRequestHeaderException(MissingRequestHeaderException exception) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .contentType(MediaType.APPLICATION_JSON)
-                .body(new ExceptionMessage(HttpStatus.BAD_REQUEST.value(), this.propertyValues.missingHeader));
+                .body(new ExceptionMessage(HttpStatus.BAD_REQUEST.value(), this.propertiesValues.missingHeader));
     }
 
     @ExceptionHandler(HttpClientErrorException.class)
@@ -47,7 +47,7 @@ public class ResponseExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(new ExceptionMessage(
                             HttpStatus.INTERNAL_SERVER_ERROR.value(),
-                            this.propertyValues.unexpectedErrorMessage + exception.getMessage()
+                            this.propertiesValues.unexpectedErrorMessage + " " +exception.getMessage()
                         )
                 );
     }
